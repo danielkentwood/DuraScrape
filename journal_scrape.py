@@ -98,6 +98,8 @@ class j_neurophys:
 		# get metadata
 		meta = dict()
 		meta['url'] = URL
+		meta['volume'] = art_page.select('div.cover-image__details ')[0].find('span',{'class':'volume'}).get_text()
+		meta['issue'] = art_page.select('div.cover-image__details ')[0].find('span',{'class':'issue'}).get_text()
         meta['title']= art_page.find('h1',{'class':'citation__title'}).get_text()
         meta['authors'] = [i.find('a').get_text() for i in loa]
         meta['doi'] = art_page.find('a',{'class':'epub-section__doi__text'}).get_text()
