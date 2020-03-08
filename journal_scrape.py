@@ -1,65 +1,21 @@
 import re
 
+from dbclass import Database
+
 from bs4 import BeautifulSoup as Bs
 
-import pymysql
+import psycopg2 as pg
 
 from requests import get
 
 
-class Database:
-    def __init__(self):
-        self.dbname = "findingssm"
-        self.host = "findingssm.c9zjgwsivgee.us-east-2.rds.amazonaws.com"
-        self.port = 3306
-        self.user = "danielkentwood"
-        self.password = "findingsdbsm"
-
-    def connect(self):
-        self.conn = pymysql.connect(
-            host=self.host,
-            user=self.user,
-            port=self.port,
-            passwd=self.password,
-            db=self.dbname,
-            charset='utf8mb4',
-            cursorclass=pymysql.cursors.DictCursor)
-
-    def disconnect(self):
-        self.conn.close()
-
-
-class Table(Database):
-    def __init__(self, dbname):
-        self.database = Database
-
-    def get_unique_id(self):
-        dummy = ''
-
-    def new_article_check(self):
-        dummy = ''
-
-    def add_citation_to_db(self, citing_id, cited_id):
-        dummy = ''
-
-    def add_new_article(self, meta, section, refs):
-        # add metadata
-        with self.conn.cursor() as cursor:
-            sql = "INSERT INTO 'Metadata' ('id',\
-            'url','volume','issue','title','authors',\
-            'doi') VALUES (%s, %s, %s, %s, %s, %s, %s)"
-            cursor.execute(sql, args)
-        # add text by section
-        # add references
-
+db = Database()
 
 class JNeurophys:
     def __init__(self):
-        self.journal = 'j_neurophys'
-        self.start_URL = \
-            'https://journals.physiology.org/loi/jn/group/d1940.y1940'
+        self.journal = 'JNeurophys'
+        self.start_URL = 'https://journals.physiology.org/loi/jn/group/d1940.y1940'
         self.base_URL = 'https://journals.physiology.org/toc/jn/'
-        self.database = Database()
 
     def get_volume_list(self):
         vol_list = []
@@ -94,15 +50,21 @@ class JNeurophys:
                for a in articles]
         return toc
 
-    def get_article(self, url):
-        art_page = Bs(get(url).text, 'html.parser')
+    def get_metadata(self, art_page):
+        ''' Get metadata.
+            This will scrape the article for metadata and save it to 
+            a dictionary.
+        '''
         loa = art_page.find('div',
                             {'class': 'accordion-tabbed loa-accordion'}).\
             find_all('div', {'class': 'accordion-tabbed__tab-mobile '})
-        # get metadata
         meta = dict()
         meta['id'] = ''
         meta['url'] = url
+
+        meta['year'] = VOID
+        meta['journal'] = self.journal
+
         meta['volume'] = art_page.select('div.cover-image__details ')[0].\
             find('span', {'class': 'volume'}).get_text()
         meta['issue'] = art_page.select('div.cover-image__details ')[0].\
@@ -112,14 +74,20 @@ class JNeurophys:
         meta['authors'] = [i.find('a').get_text() for i in loa]
         meta['doi'] = art_page.\
             find('a', {'class': 'epub-section__doi__text'}).get_text()
-        # get text
+        return meta
+
+    def get_text(self, art_page):
+        ''' Get text.
+            This will scrape the article for the different sections of
+            the article, along with the text that they contain, and save
+            it all in a dictionary.
+        '''
         section = dict()
         section['Abstract'] = art_page.\
             select('div.hlFld-Abstract div.abstractSection')[0].get_text()
         section['Introduction'] = ''
         fulltext = art_page.\
-            find('div', {'class': 'hlFld-Fulltext'}).\
-            findChildren(recursive=False)
+            find('div', {'class': 'hlFld-Fulltext'}).findChildren(recursive=False)
         intro_flag = 1
         for f in fulltext:
             heading = f.\
@@ -135,7 +103,13 @@ class JNeurophys:
                         section[heading.get_text()] + text.get_text()
         if not intro_flag:
             del section['Introduction']
-        # get reference list
+        return section
+
+    def get_references(self, art_page):
+        ''' Get reference list.
+            This will scrape the article for the works cited and save 
+            them to a dictionary.
+        '''
         rlist = art_page.\
             find('ul', {'class': 'rlist separator'}).find_all('li')
         refs = dict()
@@ -147,4 +121,15 @@ class JNeurophys:
             refs[k]['authors'] = r.\
                 find('span', {'class': 'references__authors'}).\
                 get_text().split(', ')
+        return refs
+
+    def get_article(self, url):
+        ''' get_article takes a URL for an article, scrapes the metadata,
+            the text, and the references of that article, and then returns
+            dictionaries for the metadata, text, and references.
+        '''
+        art_page = Bs(get(url).text, 'html.parser')
+        meta = get_metadata(art_page)
+        section = get_text(art_page)
+        refs = get_references(art_page)
         return meta, section, refs
