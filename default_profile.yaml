@@ -1,5 +1,5 @@
 ---
-DBNAME: "findingspostgres"
+DBNAME: "findingsdbsm"
 HOST: "findingspostgres.c9zjgwsivgee.us-east-2.rds.amazonaws.com"
 PORT: 5432
 USER: "danielkentwood"
