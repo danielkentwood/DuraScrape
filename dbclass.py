@@ -146,6 +146,7 @@ class Article:
                 meta['citations'], meta['cited_by'])
         with self.db.conn.cursor() as cursor:
             cursor.execute(sql_command, args)
+        self.conn.commit()
 
     def insert_citations(self):
         ref_id_list = []
@@ -181,8 +182,19 @@ class Article:
         args = (ref_id_list, self.meta['id'])
         with self.db.conn.cursor() as cursor:
             cursor.execute(sql, args)
+        self.conn.commit()
 
     def insert_text(self):
+        for key in self.section.keys():
+            sql_command = """\
+            INSERT INTO body (\
+            id,sectiona,prose\
+            ) VALUES (%s, %s, %s)"""
+            args = (self.section['id'], key, self.section[key])
+            with self.db.conn.cursor() as cursor:
+                cursor.execute(sql_command, args)
+        self.conn.commit()
+
           
 
 

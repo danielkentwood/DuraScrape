@@ -39,3 +39,4 @@ Thumbs.db
 # Selected Files #
 ##################
 psql_creds.py
+AWS_profile.txt
