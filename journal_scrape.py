@@ -70,19 +70,20 @@ class JNeurophys:
         art_page = article.page
         loa = art_page.find('div',
                             {'class': 'accordion-tabbed loa-accordion'}).\
-            find_all('div', {'class': 'accordion-tabbed__tab-mobile '})
+            find_all('div', {'class': 'accordion-tabbed__tab-mobile'})
         # add all the metadata fields
-        meta = dict()
-        meta['id'] = article.get_unique_id()
+        self.id = article.get_unique_id()
+        meta = article.meta
+        meta['id'] = self.id
         meta['url'] = [article.url]
         meta['journal'] = self.journal
         meta['year'] = int(art_page.select('div.cover-image__details ')[0].
                            find('span', {'class': 'coverDate'}).
                            get_text()[-4:])
-        meta['volume'] = art_page.select('div.cover-image__details ')[0].\
-            find('span', {'class': 'volume'}).get_text()
-        meta['issue'] = art_page.select('div.cover-image__details ')[0].\
-            find('span', {'class': 'issue'}).get_text()
+        meta['volume'] = int(art_page.select('div.cover-image__details ')[0].\
+            find('span', {'class': 'volume'}).get_text()[7:])
+        meta['issue'] = int(art_page.select('div.cover-image__details ')[0].\
+            find('span', {'class': 'issue'}).get_text()[6:])
         meta['title'] = art_page.find('h1', {'class': 'citation__title'}).\
             get_text()
         meta['authors'] = [i.find('a').get_text() for i in loa]
@@ -98,23 +99,23 @@ class JNeurophys:
         '''
         art_page = article.page
         section = dict()
-        section['Abstract'] = art_page.\
+        section['ABSTRACT'] = art_page.\
             select('div.hlFld-Abstract div.abstractSection')[0].get_text()
-        section['Introduction'] = ''
+        section['INTRODUCTION'] = ''
         fulltext = art_page.\
             find('div', {'class': 'hlFld-Fulltext'}).findChildren(recursive=False)
         intro_flag = 1
         for f in fulltext:
             heading = f.find('h1', {'class': 'article-section__title section__title'})
             if not heading:
-                section['Introduction'] = section['Introduction'] + ' ' + f.find_text()
+                section['INTRODUCTION'] = section['INTRODUCTION'] + ' ' + f.get_text()
             else:
                 intro_flag = 0
                 section[heading.get_text()] = ''
                 for text in heading.find_parent().findChildren('div'):
                     section[heading.get_text()] = section[heading.get_text()] + text.get_text()
         if not intro_flag:
-            del section['Introduction']
+            del section['INTRODUCTION']
         return section
 
     def get_references(self, article):
@@ -128,8 +129,9 @@ class JNeurophys:
         refs = dict()
         for k, r in enumerate(rlist):
             refs[k] = dict()
-            refs[k]['url'] = [i.get('href') for i in r.find_all('a')]
-            refs[k]['year'] = int(r.find('span', {'class': 'references__year'}).get_text())
+            urls = [i.get('href') for i in r.find_all('a')]
+            refs[k]['url'] = [i for i in urls if 'http' in i]
+            refs[k]['year'] = int(r.find('span', {'class': 'references__year'}).get_text()[:4])
             refs[k]['title'] = r.\
                 find('span', {'class': 'references__article-title'}).get_text()
             refs[k]['journal'] = r.find('span', {'class': 'references__source'}).get_text()
@@ -154,9 +156,17 @@ class JNeurophys:
     def crawl_journal(self):
         """
         Starts from the beginning of the journal (subject to open-source
-        constraints at the beginning) and scrapes through all of the articles.
+        constraints for now) and scrapes all of the articles.
         """
-
+        vol_list = self.get_volume_list()
+        open_access = [i for i in vol_list if i>76]
+        iss_list = self.get_issue_urls(open_access)
+        for iss in iss_list:
+            toc = self.get_issue_toc(iss)
+            for c in toc:
+            # check if article is behind a paywall. If so, skip it (for now)
+            if not c.find('div',{'class':'badges'}).get_text():
+                continue 
 
 
 

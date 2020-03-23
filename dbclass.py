@@ -1,10 +1,10 @@
 import logging
 
-import numpy as np
-
 import psycopg2 as pg
 
 import yaml
+
+import pandas as pd
 
 
 log = logging.getLogger(__name__)
@@ -49,11 +49,21 @@ class Database:
             format(host, str(port), db, user, passwd)
         return pg.connect(conn_string)
 
+    def terminate_all_other_connections(self):
+        sql="""
+        SELECT pg_terminate_backend( pid ) \
+        FROM pg_stat_activity \
+        WHERE pid <> pg_backend_pid( ) \
+        AND datname = current_database( );
+        """
+        with self.db.conn.cursor() as cursor:
+            cursor.execute(sql)
+
     def create_tables(self):
         with self.conn.cursor() as cursor:
             meta_sql = '''
                 CREATE TABLE IF NOT EXISTS metadata (
-                id int primary key,
+                id bigint primary key,
                 url text[],
                 journal text,
                 year int,
@@ -68,7 +78,7 @@ class Database:
             cursor.execute(meta_sql)
             text_sql = '''
                 CREATE TABLE IF NOT EXISTS body (
-                id int,
+                id bigint,
                 sectionA text,
                 sectionB text,
                 prose text
@@ -77,7 +87,7 @@ class Database:
         self.conn.commit()
 
 
-class Article:
+class Article():
     def __init__(self):
         self.meta = self.initialize_meta()
         self.section = {}
@@ -88,12 +98,12 @@ class Article:
 
     def initialize_meta(self):
         meta = {}
-        meta['id'] = np.nan
+        meta['id'] = -1
         meta['url'] = []
         meta['journal'] = ''
-        meta['year'] = np.nan
-        meta['volume'] = np.nan
-        meta['issue'] = np.nan
+        meta['year'] = -1
+        meta['volume'] = -1
+        meta['issue'] = -1
         meta['title'] = ''
         meta['authors'] = []
         meta['doi'] = ''
@@ -107,7 +117,11 @@ class Article:
         FROM metadata"""
         with self.db.conn.cursor() as cursor:
             cursor.execute(sql)
-            return cursor.fetchone()[0] + 1
+            uid = cursor.fetchone()[0]
+            if not isinstance(uid,int):
+                return 0
+            else:
+                return uid + 1
 
     def article_exists(self, title, year):
         sql_command = """\
@@ -120,9 +134,18 @@ class Article:
             cursor.execute(sql_command, args)
             return cursor.fetchone()[0] > 0
 
+    def get_article_list(self, journal_name):
+        sql_command = """\
+        SELECT year, issue, title \
+        FROM metadata \
+        WHERE journal = {}"""
+        args = "'" + journal_name + "'"
+        data = pd.read_sql(sql_command.format(args), db.conn)
+        return data
+
     def get_meta_from_title_and_year(self, title, year):
         sql_command = """\
-        SELECT id \
+        SELECT * \
         FROM metadata \
         WHERE title = %s \
         AND year = %s"""
@@ -146,7 +169,7 @@ class Article:
                 meta['citations'], meta['cited_by'])
         with self.db.conn.cursor() as cursor:
             cursor.execute(sql_command, args)
-        self.conn.commit()
+        self.db.conn.commit()
 
     def insert_citations(self):
         ref_id_list = []
@@ -154,21 +177,23 @@ class Article:
         for c in self.refs:
             # For each ref, see if it exists. If not, build it and insert.
             # If it does exist, grab the metadata
-            if not self.article_exists(c['title'], c['year']):
+            if not self.article_exists(self.refs[c]['title'], 
+                                       self.refs[c]['year']):
                 meta = self.initialize_meta()
                 meta['id'] = self.get_unique_id()
-                meta['url'] = c['url']
-                meta['year'] = c['year']
-                meta['title'] = c['title']
-                meta['journal'] = c['journal']
-                meta['authors'] = c['authors']
+                meta['url'] = self.refs[c]['url']
+                meta['year'] = self.refs[c]['year']
+                meta['title'] = self.refs[c]['title']
+                meta['journal'] = self.refs[c]['journal']
+                meta['authors'] = self.refs[c]['authors']
                 self.insert_metadata(meta)
             else:
-                meta = self.get_meta_from_title_and_year(c['title'], c['year'])
+                meta = self.get_meta_from_title_and_year(self.refs[c]['title'], 
+                                                         self.refs[c]['year'])
             # Add the current article's id to cited article's metadata
             sql = """\
             UPDATE metadata \
-            SET cited_by = array_cat(cited_by, %s) \
+            SET cited_by = array_cat(cited_by, ARRAY[%s]) \
             WHERE id = %s"""
             args = (self.meta['id'], meta['id'])
             with self.db.conn.cursor() as cursor:
@@ -179,10 +204,11 @@ class Article:
         UPDATE metadata \
         SET citations = array_cat(citations, %s) \
         WHERE id = %s"""
+        print(self.meta['id'], meta['id'])
         args = (ref_id_list, self.meta['id'])
         with self.db.conn.cursor() as cursor:
             cursor.execute(sql, args)
-        self.conn.commit()
+        self.db.conn.commit()
 
     def insert_text(self):
         for key in self.section.keys():
@@ -190,12 +216,33 @@ class Article:
             INSERT INTO body (\
             id,sectiona,prose\
             ) VALUES (%s, %s, %s)"""
-            args = (self.section['id'], key, self.section[key])
+            args = (self.meta['id'], key, self.section[key])
             with self.db.conn.cursor() as cursor:
                 cursor.execute(sql_command, args)
-        self.conn.commit()
+        self.db.conn.commit()
 
-          
+    def pandas_metadata(self):
+        sql_command = "SELECT * FROM metadata"
+        data = pd.read_sql(sql_command, self.db.conn)
+        return data
+
+    def pandas_body(self):
+        sql_command = "SELECT * FROM body"
+        data = pd.read_sql(sql_command, self.db.conn)
+        return data
+
+    def drop_empty_text_sections(self):
+        """
+        Find and drop sections in the body table 
+        that have no text in them.
+        """
+        sql = """
+        DELETE FROM body \
+        WHERE COALESCE(prose, '') = '';
+        """ 
+        with self.db.conn.cursor() as cursor:
+            cursor.execute(sql)
+        self.db.conn.commit()
 
 
 
