@@ -179,6 +179,7 @@ class JNeurophys:
         """
 
         self.proxy = proxy
+        self.timeout = None
 
 
 
