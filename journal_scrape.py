@@ -16,7 +16,7 @@ class JNeurophys:
 
     def get_volume_list(self):
         """
-	I want a new job.
+	I want a new set of jobs.
         Creates a list of the volumes in the journal. This list is the size of
         the number of issues. In other words, since there are six issues
         in each volume, each volume number repeats itself six times.
