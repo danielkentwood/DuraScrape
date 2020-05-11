@@ -8,6 +8,11 @@ from requests import get
 
 
 class JNeurophys:
+    """
+    This is a docstring for the class that parses the Journal of Neuro
+    psychology.
+    """
+
     def __init__(self):
         self.journal = 'J Neurophysiol'
         self.start_URL = 'https://journals.physiology.org/loi/jn/group/d1940.y1940'
