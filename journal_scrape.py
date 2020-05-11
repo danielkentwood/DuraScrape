@@ -173,8 +173,12 @@ class JNeurophys:
             if not c.find('div',{'class':'badges'}).get_text():
                 continue 
 
+    def set_proxy(self, proxy):
+        """
+        Set a proxy server to route our HTTP requests through.
+        """
 
-
+        self.proxy = proxy
 
 
 
