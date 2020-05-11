@@ -19,7 +19,8 @@ class JNeurophys:
         Creates a list of the volumes in the journal. This list is the size of
         the number of issues. In other words, since there are six issues
         in each volume, each volume number repeats itself six times.
-        """
+        Hello world. 
+	 """
         vol_list = []
         year_page = Bs(get(self.start_URL).text, 'html.parser')
         all_vol = year_page.find_all('a', {'href': re.compile(r'/toc/jn/')})
