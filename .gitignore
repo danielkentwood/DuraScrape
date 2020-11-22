@@ -33,10 +33,22 @@
 ._*
 .Spotlight-V100
 .Trashes
+.ipynb_checkpoints
+.vscode
+.gitattributes
+__pycache__
 ehthumbs.db
 Thumbs.db
+
+# Build dirs #
+################
+dist/
+build/
 
 # Selected Files #
 ##################
 psql_creds.py
 AWS_profile.txt
+default_profile.yaml
+*.pyc
+
